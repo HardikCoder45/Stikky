@@ -35,12 +35,11 @@ type PendingGeneration = {
 const PENDING_GENERATION_KEY = "stikky:pending-generation";
 
 // Downscale + re-encode to keep request payloads under Vercel's body limit (413).
-async function prepareImage(src: string, maxDim = 900): Promise<string> {
+async function prepareImage(src: string, maxDim = 768): Promise<string> {
   const img = await loadImage(src);
   const w = img.naturalWidth || 0;
   const h = img.naturalHeight || 0;
   if (!w || !h) return src;
-  if (w <= maxDim && h <= maxDim) return src;
   const scale = Math.min(1, maxDim / Math.max(w, h));
   const cw = Math.max(1, Math.round(w * scale));
   const ch = Math.max(1, Math.round(h * scale));
@@ -50,7 +49,7 @@ async function prepareImage(src: string, maxDim = 900): Promise<string> {
   const ctx = canvas.getContext("2d");
   if (!ctx) return src;
   ctx.drawImage(img, 0, 0, cw, ch);
-  return canvas.toDataURL("image/jpeg", 0.82);
+  return canvas.toDataURL("image/jpeg", 0.75);
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -126,6 +125,13 @@ export default function Home() {
     setGenerating(true);
     setGenerated(false);
     setAuthError(null);
+
+    const estimated = JSON.stringify(request).length;
+    if (estimated > 4_000_000) {
+      setGenerating(false);
+      setAuthError("Images are too large to send (over 4 MB). Remove a few reference images and try again.");
+      return;
+    }
 
     try {
       const response = await fetch("/api/generate", {
